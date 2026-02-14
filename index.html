@@ -1,0 +1,778 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Pick Assist: Prototyped By Arjun</title>
+  <style>
+    :root{
+      --bg: #0F1115;
+      --surface: #14171F;
+      --surface-2: #171B24;
+      --text: #E6E8EB;
+      --muted: #9AA3AD;
+      --border: rgba(255,255,255,0.07);
+      --accent: #E3B341;
+      --okRow: rgba(255,255,255,0.02);
+      --shortBg: rgba(239,68,68,0.12);
+      --shortText: #FECACA;
+      --mono: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+    }
+    *{ box-sizing: border-box }
+    html, body{ height:100% }
+    body{
+      margin:0;
+      background: var(--bg);
+      color: var(--text);
+      font-family: "Segoe UI", system-ui, -apple-system, Arial, sans-serif;
+    }
+    header{ max-width:1200px; margin:0 auto; padding:20px 16px 8px; }
+    .title{ display:flex; align-items:center; gap:12px; flex-wrap:wrap; }
+    h1{ margin:0; font-size:22px; letter-spacing:.2px; }
+    .accent-bar{ height:2px; width:56px; background:var(--accent); border-radius:2px; margin-top:8px; }
+    .sub{ margin:10px 0 0; color:var(--muted); font-size:13px; }
+    .how{
+      margin: 8px 0 0; color:#E6E8EB; font-size:12.5px; line-height:1.5;
+      background: rgba(227,179,65,0.06); border: 1px solid rgba(227,179,65,0.25);
+      padding:10px 12px; border-radius:10px;
+    }
+    main{ max-width:1200px; margin:0 auto; padding:12px 16px 28px; }
+    .grid{ display:grid; grid-template-columns:1fr 1fr; gap:12px; }
+    @media (max-width:1100px){ .grid{ grid-template-columns:1fr; } }
+    .card{ background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:14px; }
+    .card h2{ margin:0 0 10px; font-size:15px; color:#F3F4F6; }
+    .help{ color:var(--muted); font-size:12px; margin-top:6px; }
+    textarea{
+      width:100%; min-height:260px; padding:10px 12px;
+      border-radius:10px; border:1px solid var(--border);
+      background:var(--surface-2); color:var(--text);
+      font-family:var(--mono); font-size:12px; line-height:1.35; outline:none;
+    }
+    textarea:focus{ border-color:var(--accent); box-shadow:0 0 0 3px rgba(227,179,65,0.18); }
+    .controls{ margin-top:12px; display:flex; gap:10px; align-items:center; justify-content:space-between; flex-wrap:wrap; }
+    .actions{ display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    button{
+      border:1px solid var(--accent); background:transparent; color:var(--text);
+      padding:9px 14px; border-radius:10px; cursor:pointer; font-weight:600;
+      transition: background .15s ease, border-color .15s ease, transform .05s ease;
+    }
+    button:hover{ background:rgba(227,179,65,0.08); }
+    button:active{ transform: translateY(1px); }
+    button:disabled{ opacity:.5; cursor:not-allowed; }
+    .ghost{ border-color:var(--border); }
+    .pill{
+      font-size:12px; color:var(--muted); border:1px solid var(--border);
+      padding:6px 10px; border-radius:999px; background:var(--surface-2);
+    }
+    .msg{ white-space:pre-wrap; font-size:12px; margin-top:10px; }
+    .msg.error{ color:#FECACA; background:rgba(239,68,68,0.10); border:1px solid rgba(239,68,68,0.25); padding:10px; border-radius:10px; }
+    .msg.ok{ color:#C4F0C2; background:rgba(46,160,67,0.12); border:1px solid rgba(46,160,67,0.25); padding:10px; border-radius:10px; }
+
+    .tableWrap{
+      margin-top:12px; border:1px solid var(--border); border-radius:12px;
+      overflow:auto; max-height:56vh; background:var(--surface-2);
+    }
+    table{ border-collapse:collapse; width:100%; min-width:1200px; }
+    th, td{ border-bottom:1px solid rgba(255,255,255,0.06); padding:8px 10px; font-size:12px; white-space:nowrap; }
+    th{
+      position:sticky; top:0; background:var(--surface);
+      color:#E6E8EB; text-align:left; font-weight:700; border-bottom:1px solid rgba(255,255,255,0.10); z-index:1;
+    }
+    tr.okFirst td{ font-weight:700; border-top:1px solid rgba(255,255,255,0.18) !important; background:var(--okRow); }
+    tr.shortRow td{ background:var(--shortBg); color:var(--shortText); font-weight:700; }
+    .note{ margin-top:10px; color:var(--muted); font-size:12px; }
+
+    /* Column Manager */
+    .cm-wrap{ margin-top:12px; }
+    .cm-head{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+    .cm-help{ color:var(--muted); font-size:12px; }
+    .cm-list{
+      list-style:none; margin:8px 0 0; padding:0;
+      display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:8px;
+    }
+    .cm-item{
+      display:flex; align-items:center; gap:8px;
+      padding:8px 10px; border:1px solid var(--border); border-radius:10px; background:var(--surface-2);
+    }
+    .cm-item[draggable="true"]{ cursor:grab; }
+    .cm-item.dragover{ outline:2px dashed var(--accent); }
+    .cm-handle{
+      font-family: var(--mono); color:#E3B341; user-select:none; cursor:grab; font-size:14px;
+    }
+    .cm-name{ font-size:12px; }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="title"><h1>Pick Assist</h1></div>
+    <div class="accent-bar"></div>
+
+    <div class="how">
+      <b>What this tool does &amp; how it works</b><br/>
+      • <b>Paste data</b>: VL06F (“requirements”) on the left and LX02 (“stock”) on the right. The app parses the SAP pipe tables (|…|).<br/>
+      • <b>Allocation logic</b>: For each VL06F line (in order), the tool allocates full Storage Units (pallets) from LX02 by
+        <b>FEFO</b> (earliest <b>SLED/BBD</b> first). It <b>never breaks a pallet</b> and <b>never over‑allocates</b>.
+        If the next FEFO pallet is larger than the remaining need, it <b>keeps scanning</b> for a smaller pallet that fits.<br/>
+      • <b>When exact coverage isn’t possible</b>, the tool stops and writes a <b>SHORT</b> summary for the remainder.<br/>
+      • <b>Output layout</b>: Rows are physically grouped by <b>Delivery → Material</b>. The <b>first OK row</b> per material in a delivery shows
+        <b>Dlv.Qty</b> and <b>Sales Unit</b> and is styled bold (also in Excel). SHORT rows always display both.<br/>
+    </div>
+  </header>
+
+  <main>
+    <div class="grid">
+      <section class="card">
+        <h2>VL06F (Requirements)</h2>
+        <textarea id="vl06f" placeholder="Paste the VL06F Dynamic List Display (the |...| table) here."></textarea>
+        <div class="help">
+          Must include: <b>Pick Date</b>, <b>Loadg Date</b> (or <b>Loading Date</b>), <b>Pur. Doc.</b>, <b>Delivery</b>, <b>Material</b>,
+          <b>Item Description</b>, <b>Name of Sold-to Party</b>, <b>Name ship-to party</b>, <b>DlvTy</b>, <b>Dlv.Qty</b>, <b>Route</b>, <b>Carrier Name</b>.
+        </div>
+      </section>
+
+      <section class="card">
+        <h2>LX02 (Stock)</h2>
+        <textarea id="lx02" placeholder="Paste the LX02 Dynamic List Display (the |...| table) here."></textarea>
+        <div class="help">
+          Must include: <b>Material</b>, <b>Batch</b>, <b>Stor. Bin</b>, <b>Avail.stck</b>, <b>BUn</b>, <b>Storage Unit</b>, <b>SLED/BBD</b>.
+        </div>
+      </section>
+    </div>
+
+    <section class="card" style="margin-top:12px;">
+      <h2>Run &amp; Export</h2>
+      <div class="controls">
+        <div class="actions">
+          <button id="runBtn">Allocate</button>
+          <button id="xlsxBtn" class="ghost" disabled>Download XLSX</button>
+        </div>
+        <span class="pill">LF→Customer • NLCC→STO • Route: Z00000→Customer Pickup, blank→To be determined, else→Arranged</span>
+      </div>
+
+      <!-- Column Manager (affects Excel export only) -->
+      <div id="colManagerWrap" class="cm-wrap" style="display:none;">
+        <div class="cm-head">
+          <h3 style="margin:0; font-size:14px;">Column Manager</h3>
+          <span class="cm-help">Check to include; drag items to change export order. Applies to Excel download only.</span>
+        </div>
+        <ul id="cmList" class="cm-list" aria-label="Column order and inclusion"></ul>
+      </div>
+
+      <div id="msg"></div>
+      <div class="tableWrap" id="tableWrap" style="display:none;"></div>
+    </section>
+  </main>
+
+  <!-- Libraries (fixed) -->
+  <script src="exceljs.min.js"></script>
+  <script src="FileSaver.min.js"></script>
+
+  <script>
+    const $ = (id)=>document.getElementById(id);
+
+    /* -------------------------- Utilities -------------------------- */
+    const toText = v => (v===null || v===undefined) ? "" : String(v).trim();
+    const toUpper = v => toText(v).toUpperCase();
+    const toNumber = v => {
+      if (v===null || v===undefined) return 0;
+      const s = String(v).replace(/,/g,"").trim();
+      const n = Number(s);
+      return Number.isFinite(n) ? n : 0;
+    };
+
+    // Parse SLED/BBD to timestamp (ms since epoch). Primary: MM/DD/YYYY. Invalid/blank → +Infinity.
+    function parseSled(s) {
+      const v = (s ?? "").trim();
+      if (!v) return Number.POSITIVE_INFINITY;
+      const mmddyyyy = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+      if (mmddyyyy) {
+        const mm = Number(mmddyyyy[1]);
+        const dd = Number(mmddyyyy[2]);
+        const yyyy = Number(mmddyyyy[3]);
+        const dt = new Date(Date.UTC(yyyy, mm - 1, dd));
+        return isNaN(dt) ? Number.POSITIVE_INFINITY : dt.getTime();
+      }
+      const iso = v.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if (iso) {
+        const yyyy = Number(iso[1]), mm = Number(iso[2]), dd = Number(iso[3]);
+        const dt = new Date(Date.UTC(yyyy, mm - 1, dd));
+        return isNaN(dt) ? Number.POSITIVE_INFINITY : dt.getTime();
+      }
+      const ddmmyyyy = v.match(/^(\d{1,2})\.(\d{1,2})\.(\d{4})$/);
+      if (ddmmyyyy) {
+        const dd = Number(ddmmyyyy[1]), mm = Number(ddmmyyyy[2]), yyyy = Number(ddmmyyyy[3]);
+        const dt = new Date(Date.UTC(yyyy, mm - 1, dd));
+        return isNaN(dt) ? Number.POSITIVE_INFINITY : dt.getTime();
+      }
+      const yyyymmdd = v.match(/^(\d{4})(\d{2})(\d{2})$/);
+      if (yyyymmdd) {
+        const yyyy = Number(yyyymmdd[1]), mm = Number(yyyymmdd[2]), dd = Number(yyyymmdd[3]);
+        const dt = new Date(Date.UTC(yyyy, mm - 1, dd));
+        return isNaN(dt) ? Number.POSITIVE_INFINITY : dt.getTime();
+      }
+      const d = new Date(v);
+      return isNaN(d) ? Number.POSITIVE_INFINITY : d.getTime();
+    }
+
+    // Parse SAP pipe tables
+    function parseSapPipeTable(text){
+      const lines = (text||"").split(/\r?\n/);
+      const pipeRows = lines.map(l=>l.trim()).filter(l=>l.startsWith("|") && l.endsWith("|"));
+      if (pipeRows.length < 2) throw new Error("Could not find a pipe-delimited SAP table. Paste the |...| table from SAP.");
+
+      const splitRow = line => line.slice(1,-1).split("|").map(f=>f.trim());
+      const rows = pipeRows.map(splitRow);
+
+      function scoreHeader(arr){
+        const l = arr.map(a=>a.toLowerCase());
+        const ref = [
+          "material","delivery","pur. doc.","pick date","loadg date","loading date","item description",
+          "name of sold-to party","name ship-to party","dlv.qty","stor. bin","avail.stck","batch",
+          "sled/bbd","bun","route","carrier name","dlvty","storage unit","sales unit","su"
+        ];
+        let score = new Set(l).size;
+        for (const k of ref) if (l.includes(k)) score += 5;
+        return score;
+      }
+      let headerIdx = 0, best = -Infinity;
+      for (let i=0;i<rows.length;i++){
+        const s = scoreHeader(rows[i]);
+        if (s > best){ best = s; headerIdx = i; }
+      }
+
+      const headers = rows[headerIdx].map(h=>h);
+      const data = [];
+      for (let i=headerIdx+1;i<rows.length;i++){
+        const r = rows[i];
+        const isRepeat = r.length===headers.length && r.every((v,ix)=>v===headers[ix]);
+        if (isRepeat) continue;
+        if (r.every(v=>v==="")) continue;
+        const obj = {};
+        for (let c=0;c<headers.length;c++) obj[headers[c]] = r[c] ?? "";
+        data.push(obj);
+      }
+      return { headers, data };
+    }
+
+    function assertHas(headers, required, label){
+      const set = new Set(headers.map(h=>h.toLowerCase()));
+      const missing = required.filter(r=>!set.has(r.toLowerCase()));
+      if (missing.length) throw new Error(`${label}: Missing required column(s): ${missing.join(", ")}`);
+    }
+
+    // Excel helpers
+    const excelNumFmtInt = "#,##0";
+    const excelDateFmt = "mm/dd/yyyy";
+
+    /* -------------------------- Business mappings -------------------------- */
+    const channelFrom = (dlvTy)=>{
+      const t = toUpper(dlvTy);
+      if (t==="LF") return "Customer";
+      if (t==="NLCC") return "STO";
+      return "";
+    };
+    const transportationFrom = (route)=>{
+      const r = toUpper(route);
+      if (r==="Z00000") return "Customer Pickup";
+      if (r==="") return "To be determined";
+      return "Arranged";
+    };
+    const customerFrom = (soldTo, shipTo)=>{
+      const s = toText(soldTo);
+      return s ? s : toText(shipTo);
+    };
+
+    /* -------------------------- Allocation core -------------------------- */
+    function allocate(vl, lx){
+      const map =(arr)=>{ const m={}; arr.forEach(h=>m[h.toLowerCase()] = h); return m; };
+      const vlMap = map(vl.headers);
+      const lxMap = map(lx.headers);
+
+      const VL = {
+        pickDate:  vlMap["pick date"],
+        loadgDate: vlMap["loadg date"] || vlMap["loading date"],
+        purDoc:    vlMap["pur. doc."],
+        delivery:  vlMap["delivery"],
+        material:  vlMap["material"],
+        itemDesc:  vlMap["item description"],
+        soldTo:    vlMap["name of sold-to party"],
+        shipTo:    vlMap["name ship-to party"],
+        dlvTy:     vlMap["dlvty"],
+        qty:       vlMap["dlv.qty"],
+        route:     vlMap["route"],
+        carrier:   vlMap["carrier name"],
+        salesUnit: vlMap["sales unit"] || vlMap["su"]
+      };
+      assertHas(vl.headers, [
+        "pick date","pur. doc.","delivery","material","item description",
+        "name of sold-to party","name ship-to party","dlvty","dlv.qty","route","carrier name"
+      ], "VL06F");
+      if (!VL.loadgDate) throw new Error("VL06F: Missing required column: Loadg Date (or Loading Date)");
+
+      const LX = {
+        material: lxMap["material"],
+        batch:    lxMap["batch"],
+        bin:      lxMap["stor. bin"],
+        avail:    lxMap["avail.stck"],
+        bun:      lxMap["bun"],
+        su:       lxMap["storage unit"],
+        sled:     lxMap["sled/bbd"]
+      };
+      assertHas(lx.headers, ["material","batch","stor. bin","avail.stck","bun","storage unit","sled/bbd"], "LX02");
+
+      // Stock: FEFO → Bin A→Z → original order
+      const stock = lx.data.map((r, idx) => ({
+        __idx: idx,
+        __bin: toText(r[LX.bin]).toUpperCase(),
+        __mat: toText(r[LX.material]),
+        __avail: toNumber(r[LX.avail]),
+        __su: toText(r[LX.su]),
+        __sledTS: parseSled(r[LX.sled]),
+        raw: r
+      }))
+      .filter(s => s.__avail > 0)
+      .sort((a, b) =>
+        (a.__sledTS - b.__sledTS) ||
+        a.__bin.localeCompare(b.__bin) ||
+        (a.__idx - b.__idx)
+      );
+
+      const outHeaders = [
+        "Pick Date","Loadg Date","Pur. Doc.","Delivery","Material","Item Description",
+        "Dlv.Qty","Sales Unit","Batch","Stor. Bin","Avail.stck","BUn","Storage Unit","SLED/BBD",
+        "Allocated Qty","Short Qty","Status","Name of Sold-to Party","Channel","Transportation","Carrier Name"
+      ];
+
+      const outObjs = [];
+      let shorts = 0;
+
+      for (const sh of vl.data){
+        const pickDate  = sh[VL.pickDate];
+        const loadgDate = sh[VL.loadgDate];
+        const purDoc    = sh[VL.purDoc];
+        const delivery  = toText(sh[VL.delivery]);
+        const vlMaterial= toText(sh[VL.material]);
+        const itemDesc  = sh[VL.itemDesc];
+        const qtyReq    = toNumber(sh[VL.qty]);
+        const salesUnit = VL.salesUnit ? toText(sh[VL.salesUnit]) : "";
+        const dlvTy     = sh[VL.dlvTy];
+        const route     = sh[VL.route];
+        const carrier   = sh[VL.carrier];
+        const customer  = customerFrom(sh[VL.soldTo], sh[VL.shipTo]);
+        const channel   = channelFrom(dlvTy);
+        const transport = transportationFrom(route);
+
+        if (!vlMaterial || qtyReq <= 0) continue;
+
+        let remaining = qtyReq;
+        let allocatedSum = 0;
+
+        const candidates = stock.filter(s => s.__mat === vlMaterial && s.__avail > 0);
+
+        for (const st of candidates){
+          if (remaining <= 0) break;
+
+          // Whole pallet only; if too big, keep scanning (choice B)
+          if (st.__avail > remaining) continue;
+
+          const alloc = st.__avail;
+          st.__avail = 0;
+          remaining -= alloc;
+          allocatedSum += alloc;
+
+          const r = st.raw;
+          const rowArr = [
+            pickDate, loadgDate, purDoc, delivery, vlMaterial, itemDesc,
+            "", "", // Dlv.Qty, Sales Unit filled for first OK row per (Delivery+Material)
+            r[LX.batch], r[LX.bin], r[LX.avail], r[LX.bun], r[LX.su], r[LX.sled],
+            alloc, 0, "OK", customer, channel, transport, carrier
+          ];
+          outObjs.push({
+            arr: rowArr,
+            delivery, purDoc, material: vlMaterial,
+            status: "OK", qtyReq, salesUnit,
+            isShort: false
+          });
+        }
+
+        if (remaining > 0){
+          shorts++;
+          const rowArr = [
+            pickDate, loadgDate, purDoc, delivery, vlMaterial, itemDesc,
+            qtyReq, salesUnit,
+            "", "", "", "", "", "",
+            allocatedSum, remaining, "SHORT", customer, channel, transport, carrier
+          ];
+          outObjs.push({
+            arr: rowArr,
+            delivery, purDoc, material: vlMaterial,
+            status: "SHORT", qtyReq, salesUnit,
+            isShort: true
+          });
+        }
+      }
+
+      // Group by Delivery → Material (then Pur. Doc. for stability)
+      outObjs.sort((a, b) =>
+        a.delivery.localeCompare(b.delivery) ||
+        a.material.localeCompare(b.material) ||
+        a.purDoc.localeCompare(b.purDoc)
+      );
+
+      // First OK row per (Delivery+Material): show Dlv.Qty & Sales Unit, mark for bold
+      const colIndex = (name)=> outHeaders.findIndex(h=>h===name);
+      const idxDlvQty = colIndex("Dlv.Qty");
+      const idxSU     = colIndex("Sales Unit");
+      const firstOkByDM = new Set();
+      const firstRowIdx = [];
+
+      for (let i=0; i<outObjs.length; i++){
+        const o = outObjs[i];
+        if (o.status === "OK") {
+          const key = `${o.delivery}|${o.material}`;
+          if (!firstOkByDM.has(key)) {
+            firstOkByDM.add(key);
+            if (idxDlvQty >= 0) o.arr[idxDlvQty] = o.qtyReq;
+            if (idxSU >= 0)     o.arr[idxSU]     = o.salesUnit;
+            firstRowIdx.push(i);
+          }
+        }
+      }
+
+      const outRows = outObjs.map(o => o.arr);
+      return { outHeaders, outRows, firstRowIdx, shorts };
+    }
+
+    /* -------------------------- Column Manager (affects Excel export only) -------------------------- */
+    let currentColModel = []; // [{ name, include (bool) } in chosen order ]
+
+    function initColModel(headers){
+      currentColModel = headers.map(h => ({ name: h, include: true }));
+      renderColManager();
+    }
+
+    function renderColManager(){
+      const wrap = $("colManagerWrap");
+      const ul = $("cmList");
+      wrap.style.display = currentColModel.length ? "block" : "none";
+      ul.innerHTML = "";
+
+      currentColModel.forEach((col, idx) => {
+        const li = document.createElement("li");
+        li.className = "cm-item";
+        li.setAttribute("draggable", "true");
+        li.dataset.index = idx;
+
+        const handle = document.createElement("span");
+        handle.className = "cm-handle";
+        handle.textContent = "⋮⋮";
+
+        const cb = document.createElement("input");
+        cb.type = "checkbox";
+        cb.checked = !!col.include;
+        cb.addEventListener("change", () => { col.include = cb.checked; });
+
+        const label = document.createElement("label");
+        label.className = "cm-name";
+        label.textContent = col.name;
+
+        li.appendChild(handle);
+        li.appendChild(cb);
+        li.appendChild(label);
+        ul.appendChild(li);
+
+        // Drag & drop events
+        li.addEventListener("dragstart", (e) => {
+          e.dataTransfer.setData("text/plain", idx.toString());
+          e.dataTransfer.effectAllowed = "move";
+        });
+        li.addEventListener("dragover", (e) => {
+          e.preventDefault();
+          li.classList.add("dragover");
+        });
+        li.addEventListener("dragleave", () => li.classList.remove("dragover"));
+        li.addEventListener("drop", (e) => {
+          e.preventDefault();
+          li.classList.remove("dragover");
+          const from = Number(e.dataTransfer.getData("text/plain"));
+          const to = Number(li.dataset.index);
+          if (Number.isInteger(from) && Number.isInteger(to) && from !== to){
+            const [moved] = currentColModel.splice(from, 1);
+            currentColModel.splice(to, 0, moved);
+            renderColManager(); // re-render to update indices
+          }
+        });
+      });
+    }
+
+    function applyColumnSelection(headers, rows){
+      const selected = currentColModel.filter(c => c.include).map(c => c.name);
+      const mapIndex = name => headers.findIndex(h => h === name);
+
+      const newHeaders = selected.slice();
+      const newRows = rows.map(r => selected.map(name => r[mapIndex(name)]));
+      return { headers: newHeaders, rows: newRows };
+    }
+
+    /* -------------------------- Preview table -------------------------- */
+    function renderPreview(headers, rows, firstRowIdx){
+      const wrap = $("tableWrap");
+      wrap.style.display = "block";
+
+      const maxPreview = 4000;
+      const firstSet = new Set(firstRowIdx);
+      const show = rows.slice(0, maxPreview);
+
+      let html = "<table><thead><tr>";
+      for (const h of headers) html += `<th>${escapeHtml(h)}</th>`;
+      html += "</tr></thead><tbody>";
+
+      const statusCol = headers.findIndex(h => h === "Status");
+
+      for (let i=0;i<show.length;i++){
+        const arr = show[i];
+        const status = String(arr[statusCol] || "");
+        const clsShort = status==="SHORT" ? " shortRow" : "";
+        const clsFirst = firstSet.has(i) ? " okFirst" : "";
+        html += `<tr class="${clsFirst}${clsShort}">`;
+        for (let c=0;c<headers.length;c++){
+          html += `<td>${escapeHtml(arr[c] ?? "")}</td>`;
+        }
+        html += "</tr>";
+      }
+      html += "</tbody></table>";
+
+      if (rows.length > maxPreview){
+        html += `<div class="note">Preview limited to first ${maxPreview} rows. Download XLSX for the full output.</div>`;
+      }
+      wrap.innerHTML = html;
+    }
+    function escapeHtml(v){
+      const s = (v===null||v===undefined) ? "" : String(v);
+      return s.replace(/[&<>\"']/g, (m)=>({ "&":"&amp;","<":"&lt;","&gt;":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
+    }
+
+    /* -------------------------- Excel helpers -------------------------- */
+    function formatDateMDY(d){
+      const mm = String(d.getUTCMonth()+1).padStart(2,"0");
+      const dd = String(d.getUTCDate()).padStart(2,"0");
+      const yyyy = d.getUTCFullYear();
+      return `${mm}/${dd}/${yyyy}`;
+    }
+    function formatDateMDYShort(d){
+      const mm = String(d.getUTCMonth()+1).padStart(2,"0");
+      const dd = String(d.getUTCDate()).padStart(2,"0");
+      const yy = String(d.getUTCFullYear()).slice(-2);
+      return `${mm}/${dd}/${yy}`;
+    }
+    function getLoadgDateRangeLabel(allHeaders, allRows){
+      const idx = allHeaders.findIndex(h => h === "Loadg Date");
+      if (idx < 0) return "Pick Sheet";
+      const dates = [];
+      for (const r of allRows){
+        const v = r[idx];
+        if (v===null || v===undefined || v==="") continue;
+        const d = new Date(String(v));
+        if (!isNaN(d)) dates.push(d);
+      }
+      if (!dates.length) return "Pick Sheet";
+      dates.sort((a,b)=>a-b);
+      const first = dates[0], last = dates[dates.length-1];
+
+      const sameDay = first.getTime() === last.getTime();
+      const sameYear = first.getUTCFullYear() === last.getUTCFullYear();
+
+      if (sameDay){
+        return `Pick Sheet (${formatDateMDY(first)})`;
+      }
+      if (sameYear){
+        return `Pick Sheet (${formatDateMDYShort(first).slice(0,5)}–${formatDateMDY(last)})`;
+      }
+      return `Pick Sheet (${formatDateMDYShort(first)}–${formatDateMDYShort(last)})`;
+    }
+
+    function toExcelSafeSheetName(name){
+      const banned = /[:\\/?*\[\]]/g;
+      let s = name.replace(banned, "-");
+      if (s.length > 31) s = s.slice(0,31);
+      if (!s) s = "Sheet";
+      return s;
+    }
+
+    /* -------------------------- XLSX Export -------------------------- */
+    async function exportXlsx(title, headers, rows, firstRowIdx){
+      if (!window.ExcelJS || !window.saveAs){
+        throw new Error("Missing exceljs.min.js or FileSaver.min.js. Place both next to the HTML.");
+      }
+
+      // Apply Column Manager selection/order
+      const { headers: expHeaders, rows: expRows } = applyColumnSelection(headers, rows);
+
+      const wb = new ExcelJS.Workbook();
+      wb.creator = "Arjun Thomas Eugene";               // Author
+      wb.lastModifiedBy = "Arjun Thomas Eugene";
+      wb.created = new Date();
+
+      // Worksheet name = Pick Sheet (date range of Loadg Date)
+      const sheetLabel = getLoadgDateRangeLabel(headers, rows);
+      const sheetName = toExcelSafeSheetName(sheetLabel);
+      const ws = wb.addWorksheet(sheetName, { views: [{ state: "frozen", ySplit: 1 }] });
+
+      // Header
+      ws.addRow(expHeaders);
+      const headerRow = ws.getRow(1);
+      headerRow.height = 20;
+      headerRow.eachCell((cell) => {
+        cell.font = { bold: true, color: { argb: "FFE6E8EB" } };
+        cell.fill = { type: "pattern", pattern: "solid", fgColor: { argb: "FF14171F" } };
+        cell.border = { bottom: { style: "thin", color: { argb: "22FFFFFF" } } };
+        cell.alignment = { vertical: "middle", horizontal: "left" };
+      });
+      ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: expHeaders.length } };
+
+      // Column indices for formatting in the exported set
+      const colIndex =(name)=> expHeaders.findIndex(h=>h===name) + 1;
+      const idxPick   = colIndex("Pick Date");
+      const idxLoadg  = colIndex("Loadg Date");
+      const idxDlvQty = colIndex("Dlv.Qty");
+      const idxAvail  = colIndex("Avail.stck");
+      const idxAlloc  = colIndex("Allocated Qty");
+      const idxShort  = colIndex("Short Qty");
+      const idxSUCol  = colIndex("Storage Unit");
+      const idxStatus = colIndex("Status");
+
+      // Data rows
+      for (let i=0;i<expRows.length;i++){
+        const arr = expRows[i];
+        const row = ws.addRow(arr);
+
+        // Storage Unit as text
+        if (idxSUCol){
+          const c = row.getCell(idxSUCol);
+          c.value = (c.value===null||c.value===undefined) ? "" : String(c.value);
+          c.numFmt = "@";
+        }
+
+        function trySetDate(cidx){
+          if (!cidx) return;
+          const v = row.getCell(cidx).value;
+          const s = (v===null||v===undefined) ? "" : String(v);
+          const d = new Date(s);
+          if (!isNaN(d)) { row.getCell(cidx).value = d; row.getCell(cidx).numFmt = excelDateFmt; }
+        }
+        trySetDate(idxPick);
+        trySetDate(idxLoadg);
+
+        [idxDlvQty, idxAvail, idxAlloc, idxShort].forEach(ix=>{
+          if (!ix) return;
+          const v = row.getCell(ix).value;
+          if (v!=="" && v!==null && !isNaN(Number(String(v).replace(/,/g,"")))){
+            row.getCell(ix).value = Number(String(v).replace(/,/g,""));
+            row.getCell(ix).numFmt = excelNumFmtInt;
+          }
+        });
+
+        // Style SHORT rows
+        if (idxStatus){
+          const statusVal = String(row.getCell(idxStatus).value || "");
+          if (statusVal === "SHORT"){
+            row.eachCell(cell=>{
+              cell.fill = { type:"pattern", pattern:"solid", fgColor: { argb: "22EF4444" } };
+              cell.font = { bold: true, color: { argb: "FFFECACA" } };
+            });
+          }
+        }
+      }
+
+      // --- Apply bold + thin top border on the first OK row per (Delivery+Material) in Excel
+      for (const i of firstRowIdx) {
+        const excelRow = ws.getRow(i + 2); // header is row 1
+        excelRow.font = { ...excelRow.font, bold: true };
+        excelRow.eachCell(cell => {
+          cell.border = {
+            top: { style: "thin", color: { argb: "33FFFFFF" } },
+            left: cell.border?.left, right: cell.border?.right, bottom: cell.border?.bottom
+          };
+        });
+      }
+
+      // Column widths
+      expHeaders.forEach((h, i) => {
+        const col = ws.getColumn(i + 1);
+        col.width = Math.max(12, Math.min(40, h.length + 6));
+      });
+      ["Item Description","Name of Sold-to Party","Stor. Bin","Storage Unit"].forEach(h => {
+        const idx = expHeaders.findIndex(x => x === h);
+        if (idx >= 0) ws.getColumn(idx + 1).width = 30;
+      });
+
+      const buf = await wb.xlsx.writeBuffer();
+      const blob = new Blob([buf], { type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" });
+      const filename = `${title.replace(/[\\/:*?"<>|]/g,"-")}_${new Date().toISOString().slice(0,10)}.xlsx`;
+      saveAs(blob, filename);
+    }
+
+    /* -------------------------- Wiring -------------------------- */
+    let last = null;
+
+    $("runBtn").addEventListener("click", () => {
+      const msg = $("msg");
+      msg.className = ""; msg.textContent = "";
+      $("xlsxBtn").disabled = true;
+      $("tableWrap").style.display = "none";
+      $("colManagerWrap").style.display = "none";
+
+      try{
+        const vl = parseSapPipeTable($("vl06f").value);
+        const lx = parseSapPipeTable($("lx02").value);
+
+        const result = allocate(vl, lx);
+        last = result;
+
+        renderPreview(result.outHeaders, result.outRows, result.firstRowIdx);
+
+        // Initialize Column Manager from current headers
+        initColModel(result.outHeaders);
+
+        // Status pill
+        const pill = document.createElement("span");
+        pill.className = "pill";
+        pill.textContent = `Rows: ${result.outRows.length} • Shorts: ${result.shorts}`;
+        const controls = document.querySelector(".controls");
+        let statusRow = document.querySelector(".statusRow");
+        if (!statusRow){
+          statusRow = document.createElement("div");
+          statusRow.className = "statusRow";
+          controls.insertAdjacentElement("afterend", statusRow);
+        }
+        statusRow.innerHTML = "";
+        statusRow.appendChild(pill);
+
+        msg.className = "msg ok";
+        msg.textContent = "Done. Column Manager affects Excel download only. First OK line per material shows Dlv.Qty & Sales Unit (bold + top border). SHORT lines are highlighted. Download XLSX for formatted output.";
+        $("xlsxBtn").disabled = false;
+      } catch(e){
+        msg.className = "msg error";
+        msg.textContent = e?.message || String(e);
+      }
+    });
+
+    $("xlsxBtn").addEventListener("click", async () => {
+      const msg = $("msg");
+      try{
+        if (!last) return;
+        msg.className = "msg ok"; msg.textContent = "Building XLSX…";
+        await exportXlsx("Pick Sheet", last.outHeaders, last.outRows, last.firstRowIdx);
+        msg.className = "msg ok"; msg.textContent = "XLSX downloaded.";
+      } catch(e){
+        msg.className = "msg error";
+        msg.textContent = e?.message || String(e);
+      }
+    });
+
+    // Quick console check
+    console.log("ExcelJS loaded?", !!window.ExcelJS);
+    console.log("FileSaver loaded?", !!window.saveAs);
+  </script>
+</body>
+</html>
