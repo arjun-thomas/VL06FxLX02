@@ -163,7 +163,7 @@
     </section>
   </main>
 
-  <!-- Libraries (fixed) -->
+  <!-- Libraries (fixed and required for XLSX download) -->
   <script src="exceljs.min.js"></script>
   <script src="FileSaver.min.js"></script>
 
@@ -260,6 +260,26 @@
       if (missing.length) throw new Error(`${label}: Missing required column(s): ${missing.join(", ")}`);
     }
 
+    /* ---- alias-aware helpers ---- */
+    function pickField(map, aliases){
+      for (const a of aliases){
+        const key = a.toLowerCase();
+        if (map[key]) return map[key];
+      }
+      return null;
+    }
+    function assertHasAny(headers, groups, label){
+      const set = new Set(headers.map(h => h.toLowerCase()));
+      const missing = [];
+      for (const group of groups){
+        const ok = group.some(name => set.has(name.toLowerCase()));
+        if (!ok) missing.push(group[0]);
+      }
+      if (missing.length){
+        throw new Error(`${label}: Missing required column(s): ${missing.join(", ")}`);
+      }
+    }
+
     // Excel helpers
     const excelNumFmtInt = "#,##0";
     const excelDateFmt = "mm/dd/yyyy";
@@ -289,23 +309,33 @@
       const lxMap = map(lx.headers);
 
       const VL = {
-        pickDate:  vlMap["pick date"],
-        loadgDate: vlMap["loadg date"] || vlMap["loading date"],
-        purDoc:    vlMap["pur. doc."],
-        delivery:  vlMap["delivery"],
-        material:  vlMap["material"],
-        itemDesc:  vlMap["item description"],
-        soldTo:    vlMap["name of sold-to party"],
-        shipTo:    vlMap["name ship-to party"],
-        dlvTy:     vlMap["dlvty"],
-        qty:       vlMap["dlv.qty"],
-        route:     vlMap["route"],
-        carrier:   vlMap["carrier name"],
-        salesUnit: vlMap["sales unit"] || vlMap["su"]
+        pickDate:  pickField(vlMap, ["pick date"]),
+        loadgDate: pickField(vlMap, ["loadg date", "loading date"]),
+        purDoc:    pickField(vlMap, ["pur. doc."]),
+        delivery:  pickField(vlMap, ["delivery"]),
+        material:  pickField(vlMap, ["material"]),
+        itemDesc:  pickField(vlMap, ["item description"]),
+        soldTo:    pickField(vlMap, ["name of sold-to party","sold-to party name","sold-to party"]),
+        shipTo:    pickField(vlMap, ["name ship-to party","ship-to party name","name of ship-to party"]),
+        dlvTy:     pickField(vlMap, ["dlvty","dlv ty","delivery type"]),
+        qty:       pickField(vlMap, ["dlv.qty","dlv. qty","delivery qty","delivery quantity"]),
+        route:     pickField(vlMap, ["route"]),
+        carrier:   pickField(vlMap, ["carrier name","carrier"]),
+        salesUnit: pickField(vlMap, ["sales unit","su"])
       };
-      assertHas(vl.headers, [
-        "pick date","pur. doc.","delivery","material","item description",
-        "name of sold-to party","name ship-to party","dlvty","dlv.qty","route","carrier name"
+
+      assertHasAny(vl.headers, [
+        ["pick date"],
+        ["pur. doc."],
+        ["delivery"],
+        ["material"],
+        ["item description"],
+        ["name of sold-to party", "sold-to party name", "sold-to party"],
+        ["name ship-to party", "ship-to party name", "name of ship-to party"],
+        ["dlvty", "dlv ty", "delivery type"],
+        ["dlv.qty", "dlv. qty", "delivery qty", "delivery quantity"],
+        ["route"],
+        ["carrier name", "carrier"]
       ], "VL06F");
       if (!VL.loadgDate) throw new Error("VL06F: Missing required column: Loadg Date (or Loading Date)");
 
@@ -383,7 +413,7 @@
           const r = st.raw;
           const rowArr = [
             pickDate, loadgDate, purDoc, delivery, vlMaterial, itemDesc,
-            "", "", // Dlv.Qty, Sales Unit filled for first OK row per (Delivery+Material)
+            "", "",
             r[LX.batch], r[LX.bin], r[LX.avail], r[LX.bun], r[LX.su], r[LX.sled],
             alloc, 0, "OK", customer, channel, transport, carrier
           ];
@@ -420,7 +450,7 @@
       );
 
       // First OK row per (Delivery+Material): show Dlv.Qty & Sales Unit, mark for bold
-      const colIndex = (name)=> outHeaders.findIndex(h=>h===name);
+      const colIndex =(name)=> outHeaders.findIndex(h=>h===name);
       const idxDlvQty = colIndex("Dlv.Qty");
       const idxSU     = colIndex("Sales Unit");
       const firstOkByDM = new Set();
@@ -499,7 +529,7 @@
           if (Number.isInteger(from) && Number.isInteger(to) && from !== to){
             const [moved] = currentColModel.splice(from, 1);
             currentColModel.splice(to, 0, moved);
-            renderColManager(); // re-render to update indices
+            renderColManager();
           }
         });
       });
@@ -549,7 +579,7 @@
     }
     function escapeHtml(v){
       const s = (v===null||v===undefined) ? "" : String(v);
-      return s.replace(/[&<>\"']/g, (m)=>({ "&":"&amp;","<":"&lt;","&gt;":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
+      return s.replace(/[&<>"']/g, (m)=>({ "&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#039;" }[m]));
     }
 
     /* -------------------------- Excel helpers -------------------------- */
@@ -605,20 +635,17 @@
         throw new Error("Missing exceljs.min.js or FileSaver.min.js. Place both next to the HTML.");
       }
 
-      // Apply Column Manager selection/order
       const { headers: expHeaders, rows: expRows } = applyColumnSelection(headers, rows);
 
       const wb = new ExcelJS.Workbook();
-      wb.creator = "Arjun Thomas Eugene";               // Author
+      wb.creator = "Arjun Thomas Eugene";
       wb.lastModifiedBy = "Arjun Thomas Eugene";
       wb.created = new Date();
 
-      // Worksheet name = Pick Sheet (date range of Loadg Date)
       const sheetLabel = getLoadgDateRangeLabel(headers, rows);
       const sheetName = toExcelSafeSheetName(sheetLabel);
       const ws = wb.addWorksheet(sheetName, { views: [{ state: "frozen", ySplit: 1 }] });
 
-      // Header
       ws.addRow(expHeaders);
       const headerRow = ws.getRow(1);
       headerRow.height = 20;
@@ -630,7 +657,6 @@
       });
       ws.autoFilter = { from: { row: 1, column: 1 }, to: { row: 1, column: expHeaders.length } };
 
-      // Column indices for formatting in the exported set
       const colIndex =(name)=> expHeaders.findIndex(h=>h===name) + 1;
       const idxPick   = colIndex("Pick Date");
       const idxLoadg  = colIndex("Loadg Date");
@@ -641,12 +667,10 @@
       const idxSUCol  = colIndex("Storage Unit");
       const idxStatus = colIndex("Status");
 
-      // Data rows
       for (let i=0;i<expRows.length;i++){
         const arr = expRows[i];
         const row = ws.addRow(arr);
 
-        // Storage Unit as text
         if (idxSUCol){
           const c = row.getCell(idxSUCol);
           c.value = (c.value===null||c.value===undefined) ? "" : String(c.value);
@@ -672,7 +696,6 @@
           }
         });
 
-        // Style SHORT rows
         if (idxStatus){
           const statusVal = String(row.getCell(idxStatus).value || "");
           if (statusVal === "SHORT"){
@@ -684,9 +707,8 @@
         }
       }
 
-      // --- Apply bold + thin top border on the first OK row per (Delivery+Material) in Excel
       for (const i of firstRowIdx) {
-        const excelRow = ws.getRow(i + 2); // header is row 1
+        const excelRow = ws.getRow(i + 2);
         excelRow.font = { ...excelRow.font, bold: true };
         excelRow.eachCell(cell => {
           cell.border = {
@@ -696,7 +718,6 @@
         });
       }
 
-      // Column widths
       expHeaders.forEach((h, i) => {
         const col = ws.getColumn(i + 1);
         col.width = Math.max(12, Math.min(40, h.length + 6));
